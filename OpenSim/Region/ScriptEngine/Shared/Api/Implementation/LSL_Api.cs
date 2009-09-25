@@ -7848,7 +7848,7 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
         public LSL_String llGetSimulatorHostname()
         {
             m_host.AddScriptLPS(1);
-            return System.Environment.MachineName;
+            return World.RegionInfo.ExternalHostName; 
         }
 
         //  <summary>
