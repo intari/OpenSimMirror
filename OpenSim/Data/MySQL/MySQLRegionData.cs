@@ -138,6 +138,8 @@ namespace OpenSim.Data.MySQL
                 ret.RegionName = result["regionName"].ToString();
                 ret.posX = Convert.ToInt32(result["locX"]);
                 ret.posY = Convert.ToInt32(result["locY"]);
+                ret.sizeX = Convert.ToInt32(result["sizeX"]);
+                ret.sizeY = Convert.ToInt32(result["sizeY"]);
 
                 if (m_ColumnNames == null)
                 {
@@ -179,20 +181,30 @@ namespace OpenSim.Data.MySQL
                 data.Data.Remove("uuid");
             if (data.Data.ContainsKey("ScopeID"))
                 data.Data.Remove("ScopeID");
+            if (data.Data.ContainsKey("regionName"))
+                data.Data.Remove("regionName");
+            if (data.Data.ContainsKey("posX"))
+                data.Data.Remove("posX");
+            if (data.Data.ContainsKey("posY"))
+                data.Data.Remove("posY");
+            if (data.Data.ContainsKey("sizeX"))
+                data.Data.Remove("sizeX");
+            if (data.Data.ContainsKey("sizeY"))
+                data.Data.Remove("sizeY");
+            if (data.Data.ContainsKey("locX"))
+                data.Data.Remove("locX");
+            if (data.Data.ContainsKey("locY"))
+                data.Data.Remove("locY");
 
             string[] fields = new List<string>(data.Data.Keys).ToArray();
 
             MySqlCommand cmd = new MySqlCommand();
 
-            string update = "update `"+m_Realm+"` set ";
-            bool first = true;
+            string update = "update `"+m_Realm+"` set locX=?posX, locY=?posY, sizeX=?sizeX, sizeY=?sizeY";
             foreach (string field in fields)
             {
-                if (!first)
-                    update += ", ";
+                update += ", ";
                 update += "`" + field + "` = ?"+field;
-
-                first = false;
 
                 cmd.Parameters.AddWithValue("?"+field, data.Data[field]);
             }
@@ -204,13 +216,18 @@ namespace OpenSim.Data.MySQL
 
             cmd.CommandText = update;
             cmd.Parameters.AddWithValue("?regionID", data.RegionID.ToString());
+            cmd.Parameters.AddWithValue("?regionName", data.RegionName);
             cmd.Parameters.AddWithValue("?scopeID", data.ScopeID.ToString());
+            cmd.Parameters.AddWithValue("?posX", data.posX.ToString());
+            cmd.Parameters.AddWithValue("?posY", data.posY.ToString());
+            cmd.Parameters.AddWithValue("?sizeX", data.sizeX.ToString());
+            cmd.Parameters.AddWithValue("?sizeY", data.sizeY.ToString());
 
             if (ExecuteNonQuery(cmd) < 1)
             {
-                string insert = "insert into `" + m_Realm + "` (`uuid`, `ScopeID`, `" +
+                string insert = "insert into `" + m_Realm + "` (`uuid`, `ScopeID`, `locX`, `locY`, `sizeX`, `sizeY`, `regionName`, `" +
                         String.Join("`, `", fields) +
-                        "`) values ( ?regionID, ?scopeID, ?" + String.Join(", ?", fields) + ")";
+                        "`) values ( ?regionID, ?scopeID, ?posX, ?posY, ?sizeX, ?sizeY, ?regionName, ?" + String.Join(", ?", fields) + ")";
 
                 cmd.CommandText = insert;
 
