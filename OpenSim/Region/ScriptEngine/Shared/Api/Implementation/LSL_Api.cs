@@ -50,6 +50,9 @@ using OpenSim.Region.ScriptEngine.Shared.Api.Plugins;
 using OpenSim.Region.ScriptEngine.Shared.ScriptBase;
 using OpenSim.Region.ScriptEngine.Interfaces;
 using OpenSim.Region.ScriptEngine.Shared.Api.Interfaces;
+using OpenSim.Services.Interfaces;
+
+using GridRegion = OpenSim.Services.Interfaces.GridRegion;
 
 using AssetLandmark = OpenSim.Framework.AssetLandmark;
 
@@ -4996,6 +4999,9 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
             if (end > src.Length)
                 end = src.Length;
 
+            if (stride == 0)
+                stride = 1;
+
             //  There may be one or two ranges to be considered
 
             if (start != end)
@@ -5022,9 +5028,6 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
                 //  A negative stride reverses the direction of the
                 //  scan producing an inverted list as a result.
 
-                if (stride == 0)
-                    stride = 1;
-
                 if (stride > 0)
                 {
                     for (int i = 0; i < src.Length; i += stride)
@@ -5048,7 +5051,10 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
             }
             else
             {
-                result.Add(src.Data[start]);
+                if (start%stride == 0)
+                {
+                    result.Add(src.Data[start]);
+                }
             }
 
             return result;
@@ -5226,12 +5232,12 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
                 }
             }
 
-            List<SimpleRegionInfo> neighbors = World.CommsManager.GridService.RequestNeighbours(World.RegionInfo.RegionLocX, World.RegionInfo.RegionLocY);
+            List<GridRegion> neighbors = World.GridService.GetNeighbours(World.RegionInfo.ScopeID, World.RegionInfo.RegionID);
 
             uint neighborX = World.RegionInfo.RegionLocX + (uint)dir.x;
             uint neighborY = World.RegionInfo.RegionLocY + (uint)dir.y;
 
-            foreach (SimpleRegionInfo sri in neighbors)
+            foreach (GridRegion sri in neighbors)
             {
                 if (sri.RegionLocX == neighborX && sri.RegionLocY == neighborY)
                     return 0;
@@ -8181,7 +8187,7 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
 
                 string reply = String.Empty;
 
-                RegionInfo info = m_ScriptEngine.World.RequestClosestRegion(simulator);
+                GridRegion info = m_ScriptEngine.World.GridService.GetRegionByName(m_ScriptEngine.World.RegionInfo.ScopeID, simulator);
 
                 switch (data)
                 {
@@ -8208,7 +8214,7 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
                             ConditionalScriptSleep(1000);
                             return UUID.Zero.ToString();
                         }
-                        int access = info.RegionSettings.Maturity;
+                        int access = info.Maturity;
                         if (access == 0)
                             reply = "PG";
                         else if (access == 1)
