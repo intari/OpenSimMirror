@@ -497,7 +497,7 @@ namespace OpenSim
         {
             if (cmd.Length < 4)
             {
-                m_log.Error("Usage: create region <region name> <region_file.xml>");
+                m_log.Error("Usage: create region <region name> <region_file.ini>");
                 return;
             }
             if (cmd[3].EndsWith(".xml"))
@@ -524,7 +524,7 @@ namespace OpenSim
             }
             else
             {
-                m_log.Error("Usage: create region <region name> <region_file.xml>");
+                m_log.Error("Usage: create region <region name> <region_file.ini>");
                 return;
             }
         }
@@ -1245,20 +1245,20 @@ namespace OpenSim
         protected void LoadOar(string module, string[] cmdparams)
         {
             try
-            {            
+            {
                 if (cmdparams.Length > 2)
                 {
-                    m_sceneManager.LoadArchiveToCurrentScene(cmdparams[2]);             
+                    m_sceneManager.LoadArchiveToCurrentScene(cmdparams[2]);
                 }
                 else
                 {
-                    m_sceneManager.LoadArchiveToCurrentScene(DEFAULT_OAR_BACKUP_FILENAME);              
+                    m_sceneManager.LoadArchiveToCurrentScene(DEFAULT_OAR_BACKUP_FILENAME);
                 }
             }
             catch (Exception e)
             {
                 m_log.Error(e.Message);
-            }   
+            }
         }
 
         /// <summary>
