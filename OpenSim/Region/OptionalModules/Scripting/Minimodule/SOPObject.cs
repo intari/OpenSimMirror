@@ -227,8 +227,8 @@ namespace OpenSim.Region.OptionalModules.Scripting.Minimodule
 
         public Quaternion OffsetRotation
         {
-            get { throw new System.NotImplementedException(); }
-            set { throw new System.NotImplementedException(); }
+            get { return GetSOP().RotationOffset; }
+            set {  throw new System.NotImplementedException(); }
         }
 
         public Vector3 WorldPosition
@@ -276,8 +276,15 @@ namespace OpenSim.Region.OptionalModules.Scripting.Minimodule
 
         public string Text
         {
-            get { throw new System.NotImplementedException(); }
-            set { throw new System.NotImplementedException(); }
+            get { return GetSOP().Text; }
+            set 
+            {
+                if (CanEdit())
+                {
+                    SceneObjectPart sop = GetSOP();
+                    sop.SetText(value);
+                }
+            }
         }
 
         public bool IsRotationLockedX
