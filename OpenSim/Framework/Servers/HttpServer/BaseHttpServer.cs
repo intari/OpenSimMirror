@@ -1559,15 +1559,7 @@ namespace OpenSim.Framework.Servers.HttpServer
         public void Start()
         {
             m_log.Info("[HTTPD]: Starting up HTTP Server");
-
-            //m_workerThread = new Thread(new ThreadStart(StartHTTP));
-            //m_workerThread.Name = "HttpThread";
-            //m_workerThread.IsBackground = true;
-            //m_workerThread.Start();
-            //ThreadTracker.Add(m_workerThread);
             StartHTTP();
-            
-
         }
 
         private void StartHTTP()
@@ -1609,7 +1601,7 @@ namespace OpenSim.Framework.Servers.HttpServer
                 //while (true)
                 //{
                 //    context = m_httpListener.GetContext();
-                //    ThreadPool.QueueUserWorkItem(new WaitCallback(HandleRequest), context);
+                //    ThreadPool.UnsafeQueueUserWorkItem(new WaitCallback(HandleRequest), context);
                // }
             }
             catch (Exception e)

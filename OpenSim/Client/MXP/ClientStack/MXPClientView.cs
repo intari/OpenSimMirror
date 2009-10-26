@@ -774,6 +774,11 @@ namespace OpenSim.Client.MXP.ClientStack
             get { return m_sessionID.CRC(); }
         }
 
+        public IPEndPoint RemoteEndPoint
+        {
+            get { return Session.RemoteEndPoint; }
+        }
+
         public void SetDebugPacketLevel(int newDebug)
         {
             //m_debugLevel = newDebug;
@@ -798,9 +803,9 @@ namespace OpenSim.Client.MXP.ClientStack
                 OnConnectionClosed(this);
         }
 
-        public void Close(bool ShutdownCircuit)
+        public void Close()
         {
-            m_log.Info("[MXP ClientStack] Close Called with SC=" + ShutdownCircuit);
+            m_log.Info("[MXP ClientStack] Close Called");
 
             // Tell the client to go
             SendLogoutPacket();
@@ -815,7 +820,7 @@ namespace OpenSim.Client.MXP.ClientStack
 
         public void Kick(string message)
         {
-            Close(false);
+            Close();
         }
 
         public void Start()
@@ -991,19 +996,19 @@ namespace OpenSim.Client.MXP.ClientStack
             // Need to translate to MXP somehow
         }
 
-        public void SendAvatarData(ulong regionHandle, string firstName, string lastName, string grouptitle, UUID avatarID, uint avatarLocalID, Vector3 position, byte[] textureEntry, uint parentID, Quaternion rotation)
+        public void SendAvatarData(SendAvatarData data)
         {
             //ScenePresence presence=((Scene)this.Scene).GetScenePresence(avatarID);
-            UUID ownerID = avatarID;
-            MXPSendAvatarData(firstName + " " + lastName, ownerID, UUID.Zero, avatarID, avatarLocalID, position, rotation);
+            UUID ownerID = data.AvatarID;
+            MXPSendAvatarData(data.FirstName + " " + data.LastName, ownerID, UUID.Zero, data.AvatarID, data.AvatarLocalID, data.Position, data.Rotation);
         }
 
-        public void SendAvatarTerseUpdate(ulong regionHandle, ushort timeDilation, uint localID, Vector3 position, Vector3 velocity, Quaternion rotation, UUID uuid)
+        public void SendAvatarTerseUpdate(SendAvatarTerseData data)
         {
             MovementEventMessage me = new MovementEventMessage();
-            me.ObjectIndex = localID;
-            me.Location =ToOmVector(position);
-            me.Orientation = ToOmQuaternion(rotation);
+            me.ObjectIndex = data.LocalID;
+            me.Location = ToOmVector(data.Position);
+            me.Orientation = ToOmQuaternion(data.Rotation);
 
             Session.Send(me);
         }
@@ -1023,23 +1028,24 @@ namespace OpenSim.Client.MXP.ClientStack
             // Need to translate to MXP somehow
         }
 
-        public void SendPrimitiveToClient(ulong regionHandle, ushort timeDilation, uint localID, PrimitiveBaseShape primShape, Vector3 pos, Vector3 vel, Vector3 acc, Quaternion rotation, Vector3 rvel, uint flags, UUID objectID, UUID ownerID, string text, byte[] color, uint parentID, byte[] particleSystem, byte clickAction, byte material, byte[] textureanim, bool attachment, uint AttachPoint, UUID AssetId, UUID SoundId, double SoundVolume, byte SoundFlags, double SoundRadius)
+        public void SendPrimitiveToClient(SendPrimitiveData data)
         {
-            MXPSendPrimitive(localID, ownerID, acc, rvel, primShape, pos, objectID, vel, rotation, flags,text,color,parentID,particleSystem,clickAction,material,textureanim);
+            MXPSendPrimitive(data.localID, data.ownerID, data.acc, data.rvel, data.primShape, data.pos, data.objectID, data.vel,
+                data.rotation, (uint)data.flags, data.text, data.color, data.parentID, data.particleSystem, data.clickAction,
+                data.material, data.textureanim);
         }
 
-        public void SendPrimitiveToClient(ulong regionHandle, ushort timeDilation, uint localID, PrimitiveBaseShape primShape, Vector3 pos, Vector3 vel, Vector3 acc, Quaternion rotation, Vector3 rvel, uint flags, UUID objectID, UUID ownerID, string text, byte[] color, uint parentID, byte[] particleSystem, byte clickAction, byte material)
-        {
-            MXPSendPrimitive(localID, ownerID, acc, rvel, primShape, pos, objectID, vel, rotation, flags, text, color, parentID, particleSystem, clickAction, material, new byte[0]);
-        }
-
-        public void SendPrimTerseUpdate(ulong regionHandle, ushort timeDilation, uint localID, Vector3 position, Quaternion rotation, Vector3 velocity, Vector3 rotationalvelocity, byte state, UUID AssetId, UUID owner, int attachPoint)
+        public void SendPrimTerseUpdate(SendPrimitiveTerseData data)
         {
             MovementEventMessage me = new MovementEventMessage();
-            me.ObjectIndex = localID;
-            me.Location = ToOmVector(position);
-            me.Orientation = ToOmQuaternion(rotation);
+            me.ObjectIndex = data.LocalID;
+            me.Location = ToOmVector(data.Position);
+            me.Orientation = ToOmQuaternion(data.Rotation);
             Session.Send(me);
+        }
+
+        public void ReprioritizeUpdates(StateUpdateTypes type, UpdatePriorityHandler handler)
+        {
         }
 
         public void FlushPrimUpdates()
@@ -1448,7 +1454,7 @@ namespace OpenSim.Client.MXP.ClientStack
 
         public void Terminate()
         {
-            Close(false);
+            Close();
         }
 
         public void SendSetFollowCamProperties(UUID objectID, SortedDictionary<int, float> parameters)
@@ -1615,12 +1621,12 @@ namespace OpenSim.Client.MXP.ClientStack
         public void Disconnect(string reason)
         {
             Kick(reason);
-            Close(true);
+            Close();
         }
 
         public void Disconnect()
         {
-            Close(true);
+            Close();
         }
 
         #endregion

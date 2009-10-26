@@ -41,12 +41,10 @@ namespace OpenSim.Region.OptionalModules.World.NPC
     {
         // private const bool m_enabled = false;
 
-        private Mutex m_createMutex = new Mutex(false);
-
-        private Timer m_timer = new Timer(500);
+        private Mutex m_createMutex;
+        private Timer m_timer;
 
         private Dictionary<UUID,NPCAvatar> m_avatars = new Dictionary<UUID, NPCAvatar>();
-
         private Dictionary<UUID,AvatarAppearance> m_appearanceCache = new Dictionary<UUID, AvatarAppearance>();
 
         // Timer vars.
@@ -138,10 +136,13 @@ namespace OpenSim.Region.OptionalModules.World.NPC
 
         public void Initialise(Scene scene, IConfigSource source)
         {
-            scene.RegisterModuleInterface<INPCModule>(this);
+            m_createMutex = new Mutex(false);
 
+            m_timer = new Timer(500);
             m_timer.Elapsed += m_timer_Elapsed;
             m_timer.Start();
+            
+            scene.RegisterModuleInterface<INPCModule>(this);
         }
 
         void m_timer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
@@ -155,7 +156,6 @@ namespace OpenSim.Region.OptionalModules.World.NPC
                     NPCAvatar npcAvatar = new NPCAvatar(p_firstname, p_lastname, p_position, p_scene);
                     npcAvatar.CircuitCode = (uint) Util.RandomClass.Next(0, int.MaxValue);
 
-                    p_scene.ClientManager.Add(npcAvatar.CircuitCode, npcAvatar);
                     p_scene.AddNewClient(npcAvatar);
 
                     ScenePresence sp;

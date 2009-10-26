@@ -67,6 +67,8 @@ namespace OpenSim
 
             IConfig startupConfig = m_config.Source.Configs["Startup"];
 
+            int stpMaxThreads = 15;
+
             if (startupConfig != null)
             {
                 m_startupCommandsFile = startupConfig.GetString("startup_console_commands_file", "startup_commands.txt");
@@ -90,10 +92,22 @@ namespace OpenSim
                             appender.File = fileName;
                             appender.ActivateOptions();
                         }
-                        m_log.InfoFormat("[LOGGING] Logging started to file {0}", appender.File);
+                        m_log.InfoFormat("[LOGGING]: Logging started to file {0}", appender.File);
                     }
                 }
+
+                string asyncCallMethodStr = startupConfig.GetString("async_call_method", String.Empty);
+                FireAndForgetMethod asyncCallMethod;
+                if (!String.IsNullOrEmpty(asyncCallMethodStr) && Utils.EnumTryParse<FireAndForgetMethod>(asyncCallMethodStr, out asyncCallMethod))
+                    Util.FireAndForgetMethod = asyncCallMethod;
+
+                stpMaxThreads = startupConfig.GetInt("MaxPoolThreads", 15);
             }
+
+            if (Util.FireAndForgetMethod == FireAndForgetMethod.SmartThreadPool)
+                Util.InitThreadPool(stpMaxThreads);
+
+            m_log.Info("[OPENSIM MAIN]: Using async_call_method " + Util.FireAndForgetMethod);
         }
 
         /// <summary>
@@ -157,6 +171,9 @@ namespace OpenSim
                 m_scriptTimer.Interval = 1200*1000;
                 m_scriptTimer.Elapsed += RunAutoTimerScript;
             }
+
+            // Hook up to the watchdog timer
+            Watchdog.OnWatchdogTimeout += WatchdogTimeoutHandler;
 
             PrintFileToConsole("startuplogo.txt");
 
@@ -238,6 +255,10 @@ namespace OpenSim
             m_console.Commands.AddCommand("region", false, "show users",
                                           "show users [full]",
                                           "Show user data", HandleShow);
+
+            m_console.Commands.AddCommand("region", false, "show connections",
+                                          "show connections",
+                                          "Show connection data", HandleShow);
 
             m_console.Commands.AddCommand("region", false, "show users full",
                                           "show users full",
@@ -364,6 +385,14 @@ namespace OpenSim
             {
                 RunCommandScript(m_timedScript);
             }
+        }
+
+        private void WatchdogTimeoutHandler(System.Threading.Thread thread, int lastTick)
+        {
+            int now = Environment.TickCount & Int32.MaxValue;
+
+            m_log.ErrorFormat("[WATCHDOG]: Timeout detected for thread \"{0}\". ThreadState={1}. Last tick was {2}ms ago",
+                thread.Name, thread.ThreadState, now - lastTick);
         }
 
         #region Console Commands
@@ -624,8 +653,20 @@ namespace OpenSim
                         break;
 
                     case "save":
-                        m_log.Info("Saving configuration file: " + Application.iniFilePath);
-                        m_config.Save(Application.iniFilePath);
+                        if (cmdparams.Length < 2)
+                        {
+                            m_log.Error("SYNTAX: " + n + " SAVE FILE");
+                            return;
+                        }
+
+                        if (Application.iniFilePath == cmdparams[1])
+                        {
+                            m_log.Error("FILE can not be "+Application.iniFilePath);
+                            return;
+                        }
+
+                        m_log.Info("Saving configuration file: " + cmdparams[1]);
+                        m_config.Save(cmdparams[1]);
                         break;
                 }
             }
@@ -921,7 +962,25 @@ namespace OpenSim
                                 regionName));
                     }
 
-                    m_log.Info("");
+                    m_log.Info(String.Empty);
+                    break;
+
+                case "connections":
+                    System.Text.StringBuilder connections = new System.Text.StringBuilder("Connections:\n");
+                    m_sceneManager.ForEachScene(
+                        delegate(Scene scene)
+                        {
+                            scene.ClientManager.ForEachSync(
+                                delegate(IClientAPI client)
+                                {
+                                    connections.AppendFormat("{0}: {1} ({2}) from {3} on circuit {4}\n",
+                                        scene.RegionInfo.RegionName, client.Name, client.AgentId, client.RemoteEndPoint, client.CircuitCode);
+                                }
+                            );
+                        }
+                    );
+
+                    m_log.Info(connections.ToString());
                     break;
 
                 case "modules":

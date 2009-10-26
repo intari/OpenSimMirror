@@ -414,9 +414,12 @@ namespace OpenSim.Region.CoreModules.World.Estate
         private void handleEstateTeleportAllUsersHomeRequest(IClientAPI remover_client, UUID invoice, UUID senderID)
         {
             // Get a fresh list that will not change as people get teleported away
-            List<ScenePresence> prescences = m_scene.GetScenePresences(); 
-            foreach (ScenePresence p in prescences)
+            ScenePresence[] presences = m_scene.GetScenePresences();
+
+            for (int i = 0; i < presences.Length; i++)
             {
+                ScenePresence p = presences[i];
+
                 if (p.UUID != senderID)
                 {
                     // make sure they are still there, we could be working down a long list
@@ -756,7 +759,7 @@ namespace OpenSim.Region.CoreModules.World.Estate
 
         public void sendRegionHandshakeToAll()
         {
-            m_scene.Broadcast(sendRegionHandshake);
+            m_scene.ForEachClient(sendRegionHandshake);
         }
 
         public void handleEstateChangeInfo(IClientAPI remoteClient, UUID invoice, UUID senderID, UInt32 parms1, UInt32 parms2)

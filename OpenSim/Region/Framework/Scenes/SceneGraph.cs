@@ -66,7 +66,9 @@ namespace OpenSim.Region.Framework.Scenes
 
         #region Fields
 
-        protected internal Dictionary<UUID, ScenePresence> ScenePresences = new Dictionary<UUID, ScenePresence>();
+        protected Dictionary<UUID, ScenePresence> m_scenePresences = new Dictionary<UUID, ScenePresence>();
+        protected ScenePresence[] m_scenePresenceArray = new ScenePresence[0];
+
         // SceneObjects is not currently populated or used.
         //public Dictionary<UUID, SceneObjectGroup> SceneObjects;
         protected internal EntityManager Entities = new EntityManager();
@@ -77,7 +79,7 @@ namespace OpenSim.Region.Framework.Scenes
 
         protected RegionInfo m_regInfo;
         protected Scene m_parentScene;
-        protected Dictionary<UUID, EntityBase> m_updateList = new Dictionary<UUID, EntityBase>();
+        protected Dictionary<UUID, SceneObjectGroup> m_updateList = new Dictionary<UUID, SceneObjectGroup>();
         protected int m_numRootAgents = 0;
         protected int m_numPrim = 0;
         protected int m_numChildAgents = 0;
@@ -126,10 +128,12 @@ namespace OpenSim.Region.Framework.Scenes
 
         protected internal void Close()
         {
-            lock (ScenePresences)
+            lock (m_scenePresences)
             {
-                ScenePresences.Clear();
+                m_scenePresences.Clear();
+                m_scenePresenceArray = new ScenePresence[0];
             }
+
             lock (m_dictionary_lock)
             {
                 SceneObjectGroupsByFullID.Clear();
@@ -155,23 +159,11 @@ namespace OpenSim.Region.Framework.Scenes
             }
         }
 
-        protected internal void UpdateEntities()
-        {
-            List<EntityBase> updateEntities = GetEntities();
-
-            foreach (EntityBase entity in updateEntities)
-            {
-                entity.Update();
-            }
-        }
-
         protected internal void UpdatePresences()
         {
-            List<ScenePresence> updateScenePresences = GetScenePresences();
-            foreach (ScenePresence pres in updateScenePresences)
-            {
-                pres.Update();
-            }
+            ScenePresence[] updateScenePresences = GetScenePresences();
+            for (int i = 0; i < updateScenePresences.Length; i++)
+                updateScenePresences[i].Update();
         }
 
         protected internal float UpdatePhysics(double elapsed)
@@ -200,15 +192,9 @@ namespace OpenSim.Region.Framework.Scenes
 
         protected internal void UpdateScenePresenceMovement()
         {
-            List<ScenePresence> moveEntities = GetScenePresences();
-
-            foreach (EntityBase entity in moveEntities)
-            {
-                //cfk. This throws occaisional exceptions on a heavily used region
-                //and I added this null check to try to preclude the exception.
-                if (entity != null)
-                    entity.UpdateMovement();
-            }
+            ScenePresence[] moveEntities = GetScenePresences();
+            for (int i = 0; i < moveEntities.Length; i++)
+                moveEntities[i].UpdateMovement();
         }
 
         #endregion
@@ -365,12 +351,12 @@ namespace OpenSim.Region.Framework.Scenes
         }
 
         /// <summary>
-        /// Add an entity to the list of prims to process on the next update
+        /// Add an object to the list of prims to process on the next update
         /// </summary>
         /// <param name="obj">
-        /// A <see cref="EntityBase"/>
+        /// A <see cref="SceneObjectGroup"/>
         /// </param>
-        protected internal void AddToUpdateList(EntityBase obj)
+        protected internal void AddToUpdateList(SceneObjectGroup obj)
         {
             lock (m_updateList)
             {
@@ -381,18 +367,18 @@ namespace OpenSim.Region.Framework.Scenes
         /// <summary>
         /// Process all pending updates
         /// </summary>
-        protected internal void ProcessUpdates()
+        protected internal void UpdateObjectGroups()
         {
-            Dictionary<UUID, EntityBase> updates;
+            Dictionary<UUID, SceneObjectGroup> updates;
             // Some updates add more updates to the updateList. 
             // Get the current list of updates and clear the list before iterating
             lock (m_updateList)
             {
-                updates = new Dictionary<UUID, EntityBase>(m_updateList);
+                updates = new Dictionary<UUID, SceneObjectGroup>(m_updateList);
                 m_updateList.Clear();
             }
-            // Go through all timers
-            foreach (KeyValuePair<UUID, EntityBase> kvp in updates)
+            // Go through all updates
+            foreach (KeyValuePair<UUID, SceneObjectGroup> kvp in updates)
             {
                 // Don't abort the whole update if one entity happens to give us an exception.
                 try
@@ -477,7 +463,6 @@ namespace OpenSim.Region.Framework.Scenes
         protected internal void AttachObject(IClientAPI remoteClient, uint objectLocalID, uint AttachmentPt, Quaternion rot, bool silent)
         {
             // If we can't take it, we can't attach it!
-            //
             SceneObjectPart part = m_parentScene.GetSceneObjectPart(objectLocalID);
             if (part == null)
                 return;
@@ -487,9 +472,16 @@ namespace OpenSim.Region.Framework.Scenes
                 return;
 
             // Calls attach with a Zero position
-            //
             AttachObject(remoteClient, objectLocalID, AttachmentPt, rot, Vector3.Zero, false);
             m_parentScene.SendAttachEvent(objectLocalID, part.ParentGroup.GetFromItemID(), remoteClient.AgentId);
+
+            // Save avatar attachment information
+            ScenePresence presence;
+            if (m_parentScene.AvatarFactory != null && m_parentScene.TryGetAvatar(remoteClient.AgentId, out presence))
+            {
+                m_log.Info("[SCENE]: Saving avatar attachment. AgentID: " + remoteClient.AgentId + ", AttachmentPoint: " + AttachmentPt);
+                m_parentScene.AvatarFactory.UpdateDatabase(remoteClient.AgentId, presence.Appearance);
+            }
         }
 
         public SceneObjectGroup RezSingleAttachment(
@@ -584,7 +576,7 @@ namespace OpenSim.Region.Framework.Scenes
                     }
 
 
-                    group.SetAttachmentPoint(Convert.ToByte(AttachmentPt));
+                    group.SetAttachmentPoint((byte)AttachmentPt);
                     group.AbsolutePosition = attachPos;
 
                     // Saves and gets itemID
@@ -623,7 +615,6 @@ namespace OpenSim.Region.Framework.Scenes
 
             newAvatar = new ScenePresence(client, m_parentScene, m_regInfo, appearance);
             newAvatar.IsChildAgent = true;
-            newAvatar.MaxPrimsPerFrame = m_parentScene.MaxPrimsPerFrame;
 
             AddScenePresence(newAvatar);
 
@@ -650,9 +641,34 @@ namespace OpenSim.Region.Framework.Scenes
 
             Entities[presence.UUID] = presence;
 
-            lock (ScenePresences)
+            lock (m_scenePresences)
             {
-                ScenePresences[presence.UUID] = presence;
+                if (!m_scenePresences.ContainsKey(presence.UUID))
+                {
+                    m_scenePresences.Add(presence.UUID, presence);
+
+                    // Create a new array of ScenePresence references
+                    int oldLength = m_scenePresenceArray.Length;
+                    ScenePresence[] newArray = new ScenePresence[oldLength + 1];
+                    Array.Copy(m_scenePresenceArray, newArray, oldLength);
+                    newArray[oldLength] = presence;
+                    m_scenePresenceArray = newArray;
+                }
+                else
+                {
+                    m_scenePresences[presence.UUID] = presence;
+                    
+                    // Do a linear search through the array of ScenePresence references
+                    // and update the modified entry
+                    for (int i = 0; i < m_scenePresenceArray.Length; i++)
+                    {
+                        if (m_scenePresenceArray[i].UUID == presence.UUID)
+                        {
+                            m_scenePresenceArray[i] = presence;
+                            break;
+                        }
+                    }
+                }
             }
         }
 
@@ -668,16 +684,30 @@ namespace OpenSim.Region.Framework.Scenes
                     agentID);
             }
 
-            lock (ScenePresences)
+            lock (m_scenePresences)
             {
-                if (!ScenePresences.Remove(agentID))
+                if (m_scenePresences.Remove(agentID))
+                {
+                    // Copy all of the elements from the previous array
+                    // into the new array except the removed element
+                    int oldLength = m_scenePresenceArray.Length;
+                    ScenePresence[] newArray = new ScenePresence[oldLength - 1];
+                    int j = 0;
+                    for (int i = 0; i < m_scenePresenceArray.Length; i++)
+                    {
+                        ScenePresence presence = m_scenePresenceArray[i];
+                        if (presence.UUID != agentID)
+                        {
+                            newArray[j] = presence;
+                            ++j;
+                        }
+                    }
+                    m_scenePresenceArray = newArray;
+                }
+                else
                 {
                     m_log.WarnFormat("[SCENE] Tried to remove non-existent scene presence with agent ID {0} from scene ScenePresences list", agentID);
                 }
-//                else
-//                {
-//                    m_log.InfoFormat("[SCENE] Removed scene presence {0} from scene presences list", agentID);
-//                }
             }
         }
 
@@ -709,20 +739,21 @@ namespace OpenSim.Region.Framework.Scenes
 
         public void RecalculateStats()
         {
-            List<ScenePresence> SPList = GetScenePresences();
+            ScenePresence[] presences = GetScenePresences();
             int rootcount = 0;
             int childcount = 0;
 
-            foreach (ScenePresence user in SPList)
+            for (int i = 0; i < presences.Length; i++)
             {
+                ScenePresence user = presences[i];
                 if (user.IsChildAgent)
-                    childcount++;
+                    ++childcount;
                 else
-                    rootcount++;
+                    ++rootcount;
             }
+
             m_numRootAgents = rootcount;
             m_numChildAgents = childcount;
-            
         }
 
         public int GetChildAgentCount()
@@ -772,12 +803,9 @@ namespace OpenSim.Region.Framework.Scenes
         /// locking is required to iterate over it.
         /// </summary>
         /// <returns></returns>
-        protected internal List<ScenePresence> GetScenePresences()
+        protected internal ScenePresence[] GetScenePresences()
         {
-            lock (ScenePresences)
-            {
-                return new List<ScenePresence>(ScenePresences.Values);
-            }
+            return m_scenePresenceArray;
         }
 
         protected internal List<ScenePresence> GetAvatars()
@@ -822,14 +850,13 @@ namespace OpenSim.Region.Framework.Scenes
             // No locking of scene presences here since we're passing back a list...
 
             List<ScenePresence> result = new List<ScenePresence>();
-            List<ScenePresence> ScenePresencesList = GetScenePresences();
+            ScenePresence[] scenePresences = GetScenePresences();
 
-            foreach (ScenePresence avatar in ScenePresencesList)
+            for (int i = 0; i < scenePresences.Length; i++)
             {
+                ScenePresence avatar = scenePresences[i];
                 if (filter(avatar))
-                {
                     result.Add(avatar);
-                }
             }
 
             return result;
@@ -844,9 +871,9 @@ namespace OpenSim.Region.Framework.Scenes
         {
             ScenePresence sp;
             
-            lock (ScenePresences)
+            lock (m_scenePresences)
             {
-                ScenePresences.TryGetValue(agentID, out sp);
+                m_scenePresences.TryGetValue(agentID, out sp);
             }
 
             return sp;
@@ -857,7 +884,7 @@ namespace OpenSim.Region.Framework.Scenes
         /// </summary>
         /// <param name="localID"></param>
         /// <returns>null if no scene object group containing that prim is found</returns>
-        private SceneObjectGroup GetGroupByPrim(uint localID)
+        public SceneObjectGroup GetGroupByPrim(uint localID)
         {
             if (Entities.ContainsKey(localID))
                 return Entities[localID] as SceneObjectGroup;
@@ -1005,48 +1032,24 @@ namespace OpenSim.Region.Framework.Scenes
 
         protected internal bool TryGetAvatar(UUID avatarId, out ScenePresence avatar)
         {
-            ScenePresence presence;
-            
-            lock (ScenePresences)
-            {
-                if (ScenePresences.TryGetValue(avatarId, out presence))
-                {
-                    avatar = presence;
-                    return true;
-
-                    //if (!presence.IsChildAgent)
-                    //{
-                    //    avatar = presence;
-                    //    return true;
-                    //}
-                    //else
-                    //{
-                    //    m_log.WarnFormat(
-                    //        "[INNER SCENE]: Requested avatar {0} could not be found in scene {1} since it is only registered as a child agent!",
-                    //        avatarId, m_parentScene.RegionInfo.RegionName);
-                    //}
-                }
-            }
-
-            avatar = null;
-            return false;
+            lock (m_scenePresences)
+                return m_scenePresences.TryGetValue(avatarId, out avatar);
         }
 
         protected internal bool TryGetAvatarByName(string avatarName, out ScenePresence avatar)
         {
-            lock (ScenePresences)
-            {
-                foreach (ScenePresence presence in ScenePresences.Values)
-                {
-                    if (!presence.IsChildAgent)
-                    {
-                        string name = presence.ControllingClient.Name;
+            ScenePresence[] presences = GetScenePresences();
 
-                        if (String.Compare(avatarName, name, true) == 0)
-                        {
-                            avatar = presence;
-                            return true;
-                        }
+            for (int i = 0; i < presences.Length; i++)
+            {
+                ScenePresence presence = presences[i];
+
+                if (!presence.IsChildAgent)
+                {
+                    if (String.Compare(avatarName, presence.ControllingClient.Name, true) == 0)
+                    {
+                        avatar = presence;
+                        return true;
                     }
                 }
             }
@@ -1115,23 +1118,6 @@ namespace OpenSim.Region.Framework.Scenes
                 return group.GetPartsFullID(localID);
             else
                 return UUID.Zero;
-        }
-
-        protected internal void ForEachClient(Action<IClientAPI> action)
-        {
-            List<ScenePresence> splist = GetScenePresences();
-            foreach (ScenePresence presence in splist)
-            {
-                try
-                {
-                    action(presence.ControllingClient);
-                }
-                catch (Exception e)
-                {
-                    // Catch it and move on. This includes situations where splist has inconsistent info
-                    m_log.WarnFormat("[SCENE]: Problem processing action in ForEachClient: ", e.Message);
-                }
-            }
         }
 
         protected internal void ForEachSOG(Action<SceneObjectGroup> action)
@@ -1253,7 +1239,7 @@ namespace OpenSim.Region.Framework.Scenes
             {
                 if (m_parentScene.Permissions.CanMoveObject(group.UUID, remoteClient.AgentId))
                 {
-                    group.UpdateGroupRotation(rot);
+                    group.UpdateGroupRotationR(rot);
                 }
             }
         }
@@ -1272,7 +1258,7 @@ namespace OpenSim.Region.Framework.Scenes
             {
                 if (m_parentScene.Permissions.CanMoveObject(group.UUID, remoteClient.AgentId))
                 {
-                    group.UpdateGroupRotation(pos, rot);
+                    group.UpdateGroupRotationPR(pos, rot);
                 }
             }
         }
@@ -1828,7 +1814,7 @@ namespace OpenSim.Region.Framework.Scenes
 
                     if (rot != Quaternion.Identity)
                     {
-                        copy.UpdateGroupRotation(rot);
+                        copy.UpdateGroupRotationR(rot);
                     }
 
                     copy.CreateScriptInstances(0, false, m_parentScene.DefaultScriptEngine, 0);

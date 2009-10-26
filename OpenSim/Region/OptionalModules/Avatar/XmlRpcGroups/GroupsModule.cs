@@ -94,7 +94,7 @@ namespace OpenSim.Region.OptionalModules.Avatar.XmlRpcGroups
         }
         private Dictionary<UUID, GroupRequestIDInfo> m_clientRequestIDInfo = new Dictionary<UUID, GroupRequestIDInfo>();
         private const int m_clientRequestIDFlushTimeOut = 300000; // Every 5 minutes
-        private Timer m_clientRequestIDFlushTimer = new Timer(); 
+        private Timer m_clientRequestIDFlushTimer;
 
 
         // Configuration settings
@@ -133,6 +133,7 @@ namespace OpenSim.Region.OptionalModules.Avatar.XmlRpcGroups
                 m_groupNoticesEnabled   = groupsConfig.GetBoolean("NoticesEnabled", true);
                 m_debugEnabled          = groupsConfig.GetBoolean("DebugEnabled", true);
 
+                m_clientRequestIDFlushTimer = new Timer();
                 m_clientRequestIDFlushTimer.Interval = m_clientRequestIDFlushTimeOut;
                 m_clientRequestIDFlushTimer.Elapsed += FlushClientRequestIDInfoCache;
                 m_clientRequestIDFlushTimer.AutoReset = true;
@@ -1244,18 +1245,16 @@ namespace OpenSim.Region.OptionalModules.Avatar.XmlRpcGroups
             if (m_debugEnabled) m_log.DebugFormat("[GROUPS]: Updating scene title for {0} with title: {1}", AgentID, Title);
 
             ScenePresence presence = null;
-            lock (m_sceneList)
-            {
-                foreach (Scene scene in m_sceneList)
-                {
-                    presence = scene.GetScenePresence(AgentID);
-                    if (presence != null)
-                    {
-                        presence.Grouptitle = Title;
 
-                        // FixMe: Ter suggests a "Schedule" method that I can't find.
-                        presence.SendFullUpdateToAllClients();
-                    }
+            foreach (Scene scene in m_sceneList)
+            {
+                presence = scene.GetScenePresence(AgentID);
+                if (presence != null)
+                {
+                    presence.Grouptitle = Title;
+
+                    // FixMe: Ter suggests a "Schedule" method that I can't find.
+                    presence.SendFullUpdateToAllClients();
                 }
             }
         }

@@ -393,6 +393,11 @@ namespace OpenSim.Tests.Common.Mock
             set { m_circuitCode = value; }
         }
 
+        public IPEndPoint RemoteEndPoint
+        {
+            get { return new IPEndPoint(IPAddress.Loopback, (ushort)m_circuitCode); }
+        }
+
         /// <summary>
         /// Constructor
         /// </summary>
@@ -587,13 +592,11 @@ namespace OpenSim.Tests.Common.Mock
         {
         }
 
-        public virtual void SendAvatarData(ulong regionHandle, string firstName, string lastName, string grouptitle, UUID avatarID,
-                                           uint avatarLocalID, Vector3 Pos, byte[] textureEntry, uint parentID, Quaternion rotation)
+        public virtual void SendAvatarData(SendAvatarData data)
         {
         }
 
-        public virtual void SendAvatarTerseUpdate(ulong regionHandle, ushort timeDilation, uint localID,
-                                                  Vector3 position, Vector3 velocity, Quaternion rotation, UUID agentid)
+        public virtual void SendAvatarTerseUpdate(SendAvatarTerseData data)
         {
         }
 
@@ -609,27 +612,15 @@ namespace OpenSim.Tests.Common.Mock
         {
         }
 
-        public virtual void SendPrimitiveToClient(ulong regionHandle, ushort timeDilation, uint localID,
-                                                  PrimitiveBaseShape primShape, Vector3 pos, Vector3 vel,
-                                                  Vector3 acc, Quaternion rotation, Vector3 rvel, uint flags,
-                                                  UUID objectID, UUID ownerID, string text, byte[] color,
-                                                  uint parentID,
-                                                  byte[] particleSystem, byte clickAction, byte material)
+        public virtual void SendPrimitiveToClient(SendPrimitiveData data)
         {
         }
-        public virtual void SendPrimitiveToClient(ulong regionHandle, ushort timeDilation, uint localID,
-                                                  PrimitiveBaseShape primShape, Vector3 pos, Vector3 vel,
-                                                  Vector3 acc, Quaternion rotation, Vector3 rvel, uint flags,
-                                                  UUID objectID, UUID ownerID, string text, byte[] color,
-                                                  uint parentID,
-                                                  byte[] particleSystem, byte clickAction, byte material, byte[] textureanimation,
-                                                  bool attachment, uint AttachmentPoint, UUID AssetId, UUID SoundId, double SoundVolume, byte SoundFlags, double SoundRadius)
+
+        public virtual void SendPrimTerseUpdate(SendPrimitiveTerseData data)
         {
         }
-        public virtual void SendPrimTerseUpdate(ulong regionHandle, ushort timeDilation, uint localID,
-                                                Vector3 position, Quaternion rotation, Vector3 velocity,
-                                                Vector3 rotationalvelocity, byte state, UUID AssetId,
-                                                UUID ownerID, int attachPoint)
+
+        public virtual void ReprioritizeUpdates(StateUpdateTypes type, UpdatePriorityHandler handler)
         {
         }
 
@@ -865,7 +856,7 @@ namespace OpenSim.Tests.Common.Mock
         {
         }
 
-        public void Close(bool ShutdownCircuit)
+        public void Close()
         {
             m_scene.RemoveClient(AgentId);
         }

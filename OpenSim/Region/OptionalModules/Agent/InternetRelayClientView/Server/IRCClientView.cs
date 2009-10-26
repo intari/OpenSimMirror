@@ -67,9 +67,8 @@ namespace OpenSim.Region.OptionalModules.Agent.InternetRelayClientView.Server
         {
             m_client = client;
             m_scene = scene;
-            
-            Thread loopThread = new Thread(InternalLoop);
-            loopThread.Start();
+
+            Watchdog.StartThread(InternalLoop, "IRCClientView", ThreadPriority.Normal, false);
         }
 
         private void SendServerCommand(string command)
@@ -102,7 +101,7 @@ namespace OpenSim.Region.OptionalModules.Agent.InternetRelayClientView.Server
         {
             try
             {
-                string strbuf = "";
+                string strbuf = String.Empty;
 
                 while (m_connected && m_client.Connected)
                 {
@@ -140,6 +139,7 @@ namespace OpenSim.Region.OptionalModules.Agent.InternetRelayClientView.Server
                     }
 
                     Thread.Sleep(0);
+                    Watchdog.UpdateThread();
                 }
             }
             catch (IOException)
@@ -156,6 +156,8 @@ namespace OpenSim.Region.OptionalModules.Agent.InternetRelayClientView.Server
 
                 m_log.Warn("[IRCd] Disconnected client.");
             }
+
+            Watchdog.RemoveThread();
         }
 
         private void ProcessInMessage(string message, string command)
@@ -634,6 +636,12 @@ namespace OpenSim.Region.OptionalModules.Agent.InternetRelayClientView.Server
         {
             get { return (uint)Util.RandomClass.Next(0,int.MaxValue); }
         }
+
+        public IPEndPoint RemoteEndPoint
+        {
+            get { return (IPEndPoint)m_client.Client.RemoteEndPoint; }
+        }
+
 #pragma warning disable 67
         public event GenericMessage OnGenericMessage;
         public event ImprovedInstantMessage OnInstantMessage;
@@ -825,7 +833,9 @@ namespace OpenSim.Region.OptionalModules.Agent.InternetRelayClientView.Server
         public event PickInfoUpdate OnPickInfoUpdate;
         public event AvatarNotesUpdate OnAvatarNotesUpdate;
         public event MuteListRequest OnMuteListRequest;
+        public event AvatarInterestUpdate OnAvatarInterestUpdate;
         public event PlacesQuery OnPlacesQuery;
+
 #pragma warning restore 67
 
         public void SetDebugPacketLevel(int newDebug)
@@ -843,7 +853,7 @@ namespace OpenSim.Region.OptionalModules.Agent.InternetRelayClientView.Server
             
         }
 
-        public void Close(bool ShutdownCircuit)
+        public void Close()
         {
             Disconnect();
         }
@@ -1005,12 +1015,12 @@ namespace OpenSim.Region.OptionalModules.Agent.InternetRelayClientView.Server
             
         }
 
-        public void SendAvatarData(ulong regionHandle, string firstName, string lastName, string grouptitle, UUID avatarID, uint avatarLocalID, Vector3 Pos, byte[] textureEntry, uint parentID, Quaternion rotation)
+        public void SendAvatarData(SendAvatarData data)
         {
             
         }
 
-        public void SendAvatarTerseUpdate(ulong regionHandle, ushort timeDilation, uint localID, Vector3 position, Vector3 velocity, Quaternion rotation, UUID agentid)
+        public void SendAvatarTerseUpdate(SendAvatarTerseData data)
         {
             
         }
@@ -1030,19 +1040,19 @@ namespace OpenSim.Region.OptionalModules.Agent.InternetRelayClientView.Server
             
         }
 
-        public void SendPrimitiveToClient(ulong regionHandle, ushort timeDilation, uint localID, PrimitiveBaseShape primShape, Vector3 pos, Vector3 vel, Vector3 acc, Quaternion rotation, Vector3 rvel, uint flags, UUID objectID, UUID ownerID, string text, byte[] color, uint parentID, byte[] particleSystem, byte clickAction, byte material, byte[] textureanim, bool attachment, uint AttachPoint, UUID AssetId, UUID SoundId, double SoundVolume, byte SoundFlags, double SoundRadius)
+        public void SendPrimitiveToClient(SendPrimitiveData data)
         {
             
         }
 
-        public void SendPrimitiveToClient(ulong regionHandle, ushort timeDilation, uint localID, PrimitiveBaseShape primShape, Vector3 pos, Vector3 vel, Vector3 acc, Quaternion rotation, Vector3 rvel, uint flags, UUID objectID, UUID ownerID, string text, byte[] color, uint parentID, byte[] particleSystem, byte clickAction, byte material)
+        public void SendPrimTerseUpdate(SendPrimitiveTerseData data)
         {
             
         }
 
-        public void SendPrimTerseUpdate(ulong regionHandle, ushort timeDilation, uint localID, Vector3 position, Quaternion rotation, Vector3 velocity, Vector3 rotationalvelocity, byte state, UUID AssetId, UUID owner, int attachPoint)
+        public void ReprioritizeUpdates(StateUpdateTypes type, UpdatePriorityHandler handler)
         {
-            
+
         }
 
         public void SendInventoryFolderDetails(UUID ownerID, UUID folderID, List<InventoryItemBase> items, List<InventoryFolderBase> folders, bool fetchFolders, bool fetchItems)
@@ -1562,6 +1572,11 @@ namespace OpenSim.Region.OptionalModules.Agent.InternetRelayClientView.Server
         public void SendAvatarClassifiedReply(UUID targetID, Dictionary<UUID, string> classifieds)
         {
             
+        }
+
+        public void SendAvatarInterestUpdate(IClientAPI client, uint wantmask, string wanttext, uint skillsmask, string skillstext, string languages)
+        {
+
         }
 
         public void SendParcelDwellReply(int localID, UUID parcelID, float dwell)

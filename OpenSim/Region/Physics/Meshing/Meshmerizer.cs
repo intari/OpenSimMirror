@@ -281,13 +281,16 @@ namespace OpenSim.Region.Physics.Meshing
 
                 if (idata == null)
                 {
-                    if (primShape.SculptData.Length == 0)
+                    if (primShape.SculptData == null || primShape.SculptData.Length == 0)
                         return null;
 
                     try
                     {
                         ManagedImage managedImage;  // we never use this
                         OpenJPEG.DecodeToImage(primShape.SculptData, out managedImage, out idata);
+
+                        // Remove the reference to the encoded JPEG2000 data so it can be GCed
+                        primShape.SculptData = Utils.EmptyBytes;
 
                         if (cacheSculptMaps)
                         {

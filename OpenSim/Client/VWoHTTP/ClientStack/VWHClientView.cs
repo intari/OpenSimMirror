@@ -207,6 +207,11 @@ namespace OpenSim.Client.VWoHTTP.ClientStack
             get { throw new System.NotImplementedException(); }
         }
 
+        public IPEndPoint RemoteEndPoint
+        {
+            get { throw new System.NotImplementedException(); }
+        }
+
         public event GenericMessage OnGenericMessage = delegate { };
         public event ImprovedInstantMessage OnInstantMessage = delegate { };
         public event ChatMessage OnChatFromClient = delegate { };
@@ -397,6 +402,7 @@ namespace OpenSim.Client.VWoHTTP.ClientStack
         public event PickInfoUpdate OnPickInfoUpdate = delegate { };
         public event AvatarNotesUpdate OnAvatarNotesUpdate = delegate { };
         public event MuteListRequest OnMuteListRequest = delegate { };
+        public event AvatarInterestUpdate OnAvatarInterestUpdate = delegate { };
         public event PlacesQuery OnPlacesQuery = delegate { };
 
 
@@ -415,7 +421,7 @@ namespace OpenSim.Client.VWoHTTP.ClientStack
             throw new System.NotImplementedException();
         }
 
-        public void Close(bool ShutdownCircuit)
+        public void Close()
         {
             throw new System.NotImplementedException();
         }
@@ -555,12 +561,12 @@ namespace OpenSim.Client.VWoHTTP.ClientStack
             throw new System.NotImplementedException();
         }
 
-        public void SendAvatarData(ulong regionHandle, string firstName, string lastName, string grouptitle, UUID avatarID, uint avatarLocalID, Vector3 Pos, byte[] textureEntry, uint parentID, Quaternion rotation)
+        public void SendAvatarData(SendAvatarData data)
         {
             throw new System.NotImplementedException();
         }
 
-        public void SendAvatarTerseUpdate(ulong regionHandle, ushort timeDilation, uint localID, Vector3 position, Vector3 velocity, Quaternion rotation, UUID uuid)
+        public void SendAvatarTerseUpdate(SendAvatarTerseData data)
         {
             throw new System.NotImplementedException();
         }
@@ -580,17 +586,17 @@ namespace OpenSim.Client.VWoHTTP.ClientStack
             throw new System.NotImplementedException();
         }
 
-        public void SendPrimitiveToClient(ulong regionHandle, ushort timeDilation, uint localID, PrimitiveBaseShape primShape, Vector3 pos, Vector3 vel, Vector3 acc, Quaternion rotation, Vector3 rvel, uint flags, UUID objectID, UUID ownerID, string text, byte[] color, uint parentID, byte[] particleSystem, byte clickAction, byte material, byte[] textureanim, bool attachment, uint AttachPoint, UUID AssetId, UUID SoundId, double SoundVolume, byte SoundFlags, double SoundRadius)
+        public void SendPrimitiveToClient(SendPrimitiveData data)
         {
             throw new System.NotImplementedException();
         }
 
-        public void SendPrimitiveToClient(ulong regionHandle, ushort timeDilation, uint localID, PrimitiveBaseShape primShape, Vector3 pos, Vector3 vel, Vector3 acc, Quaternion rotation, Vector3 rvel, uint flags, UUID objectID, UUID ownerID, string text, byte[] color, uint parentID, byte[] particleSystem, byte clickAction, byte material)
+        public void SendPrimTerseUpdate(SendPrimitiveTerseData data)
         {
             throw new System.NotImplementedException();
         }
 
-        public void SendPrimTerseUpdate(ulong regionHandle, ushort timeDilation, uint localID, Vector3 position, Quaternion rotation, Vector3 velocity, Vector3 rotationalvelocity, byte state, UUID AssetId, UUID owner, int attachPoint)
+        public void ReprioritizeUpdates(StateUpdateTypes type, UpdatePriorityHandler handler)
         {
             throw new System.NotImplementedException();
         }
@@ -1109,6 +1115,11 @@ namespace OpenSim.Client.VWoHTTP.ClientStack
         }
 
         public void SendAvatarClassifiedReply(UUID targetID, Dictionary<UUID, string> classifieds)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        public void SendAvatarInterestUpdate(IClientAPI client, uint wantmask, string wanttext, uint skillsmask, string skillstext, string languages)
         {
             throw new System.NotImplementedException();
         }
