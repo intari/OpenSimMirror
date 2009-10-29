@@ -167,9 +167,9 @@ namespace OpenSim.Region.Framework.Scenes
 
         [XmlIgnore]
         public uint AttachmentPoint;
-        
+
         [XmlIgnore]
-        public PhysicsVector RotationAxis = new PhysicsVector(1f, 1f, 1f);
+        public Vector3 RotationAxis = Vector3.One;
 
         [XmlIgnore]
         public bool VolumeDetectActive; // XmlIgnore set to avoid problems with persistance until I come to care for this
@@ -247,6 +247,13 @@ namespace OpenSim.Region.Framework.Scenes
         protected PrimitiveBaseShape m_shape;
         protected UUID m_uuid;
         protected Vector3 m_velocity;
+
+        protected Vector3 m_lastPosition;
+        protected Quaternion m_lastRotation;
+        protected Vector3 m_lastVelocity;
+        protected Vector3 m_lastAcceleration;
+        protected Vector3 m_lastAngularVelocity;
+        protected int m_lastTerseSent;
 
         // TODO: Those have to be changed into persistent properties at some later point,
         // or sit-camera on vehicles will break on sim-crossing.
@@ -531,13 +538,13 @@ namespace OpenSim.Region.Framework.Scenes
                         // Root prim actually goes at Position
                         if (_parentID == 0)
                         {
-                            PhysActor.Position = new PhysicsVector(value.X, value.Y, value.Z);
+                            PhysActor.Position = value;
                         }
                         else
                         {
                             // To move the child prim in respect to the group position and rotation we have to calculate
                             Vector3 resultingposition = GetWorldPosition();
-                            PhysActor.Position = new PhysicsVector(resultingposition.X, resultingposition.Y, resultingposition.Z);
+                            PhysActor.Position = resultingposition;
                             Quaternion resultingrot = GetWorldRotation();
                             PhysActor.Orientation = resultingrot;
                         }
@@ -579,7 +586,7 @@ namespace OpenSim.Region.Framework.Scenes
                      if (_parentID != 0 && PhysActor != null)
                     {
                         Vector3 resultingposition = GetWorldPosition();
-                        PhysActor.Position = new PhysicsVector(resultingposition.X, resultingposition.Y, resultingposition.Z);
+                        PhysActor.Position = resultingposition;
                         Quaternion resultingrot = GetWorldRotation();
                         PhysActor.Orientation = resultingrot;
 
@@ -669,7 +676,7 @@ namespace OpenSim.Region.Framework.Scenes
                 {
                     if (PhysActor.IsPhysical)
                     {
-                        PhysActor.Velocity = new PhysicsVector(value.X, value.Y, value.Z);
+                        PhysActor.Velocity = value;
                         m_parentGroup.Scene.PhysicsScene.AddPhysicsActorTaint(PhysActor);
                     }
                 }
@@ -811,7 +818,7 @@ if (m_shape != null) {
                     {
                         if (m_parentGroup.Scene.PhysicsScene != null)
                         {
-                            PhysActor.Size = new PhysicsVector(m_shape.Scale.X, m_shape.Scale.Y, m_shape.Scale.Z);
+                            PhysActor.Size = m_shape.Scale;
                             m_parentGroup.Scene.PhysicsScene.AddPhysicsActorTaint(PhysActor);
                         }
                     }
@@ -1219,7 +1226,7 @@ if (m_shape != null) {
         /// <param name="localGlobalTF">true for the local frame, false for the global frame</param>
         public void ApplyImpulse(Vector3 impulsei, bool localGlobalTF)
         {
-            PhysicsVector impulse = new PhysicsVector(impulsei.X, impulsei.Y, impulsei.Z);
+            Vector3 impulse = impulsei;
 
             if (localGlobalTF)
             {
@@ -1227,7 +1234,7 @@ if (m_shape != null) {
                 Quaternion AXgrot = grot;
                 Vector3 AXimpulsei = impulsei;
                 Vector3 newimpulse = AXimpulsei * AXgrot;
-                impulse = new PhysicsVector(newimpulse.X, newimpulse.Y, newimpulse.Z);
+                impulse = newimpulse;
             }
 
             if (m_parentGroup != null)
@@ -1245,7 +1252,7 @@ if (m_shape != null) {
         /// <param name="localGlobalTF">true for the local frame, false for the global frame</param>
         public void ApplyAngularImpulse(Vector3 impulsei, bool localGlobalTF)
         {
-            PhysicsVector impulse = new PhysicsVector(impulsei.X, impulsei.Y, impulsei.Z);
+            Vector3 impulse = impulsei;
 
             if (localGlobalTF)
             {
@@ -1253,7 +1260,7 @@ if (m_shape != null) {
                 Quaternion AXgrot = grot;
                 Vector3 AXimpulsei = impulsei;
                 Vector3 newimpulse = AXimpulsei * AXgrot;
-                impulse = new PhysicsVector(newimpulse.X, newimpulse.Y, newimpulse.Z);
+                impulse = newimpulse;
             }
 
             if (m_parentGroup != null)
@@ -1271,7 +1278,7 @@ if (m_shape != null) {
         /// <param name="localGlobalTF">true for the local frame, false for the global frame</param>
         public void SetAngularImpulse(Vector3 impulsei, bool localGlobalTF)
         {
-            PhysicsVector impulse = new PhysicsVector(impulsei.X, impulsei.Y, impulsei.Z);
+            Vector3 impulse = impulsei;
 
             if (localGlobalTF)
             {
@@ -1279,7 +1286,7 @@ if (m_shape != null) {
                 Quaternion AXgrot = grot;
                 Vector3 AXimpulsei = impulsei;
                 Vector3 newimpulse = AXimpulsei * AXgrot;
-                impulse = new PhysicsVector(newimpulse.X, newimpulse.Y, newimpulse.Z);
+                impulse = newimpulse;
             }
 
             if (m_parentGroup != null)
@@ -1327,8 +1334,8 @@ if (m_shape != null) {
                     PhysActor = m_parentGroup.Scene.PhysicsScene.AddPrimShape(
                         Name,
                         Shape,
-                        new PhysicsVector(AbsolutePosition.X, AbsolutePosition.Y, AbsolutePosition.Z),
-                        new PhysicsVector(Scale.X, Scale.Y, Scale.Z),
+                        AbsolutePosition,
+                        Scale,
                         RotationOffset,
                         RigidBody);
 
@@ -1517,7 +1524,7 @@ if (m_shape != null) {
                     PhysicsJoint joint;
 
                     joint = m_parentGroup.Scene.PhysicsScene.RequestJointCreation(Name, jointType,
-                        new PhysicsVector(AbsolutePosition.X, AbsolutePosition.Y, AbsolutePosition.Z),
+                        AbsolutePosition,
                         this.RotationOffset,
                         Description,
                         bodyNames,
@@ -1702,12 +1709,12 @@ if (m_shape != null) {
             }
         }
 
-        public PhysicsVector GetForce()
+        public Vector3 GetForce()
         {
             if (PhysActor != null)
                 return PhysActor.Force;
             else
-                return new PhysicsVector();
+                return Vector3.Zero;
         }
 
         public void GetProperties(IClientAPI client)
@@ -1810,7 +1817,7 @@ if (m_shape != null) {
             }
 
             CollisionEventUpdate a = (CollisionEventUpdate)e;
-            Dictionary<uint, float> collissionswith = a.m_objCollisionList;
+            Dictionary<uint, ContactPoint> collissionswith = a.m_objCollisionList;
             List<uint> thisHitColliders = new List<uint>();
             List<uint> endedColliders = new List<uint>();
             List<uint> startedColliders = new List<uint>();
@@ -2072,7 +2079,7 @@ if (m_shape != null) {
             }
         }
 
-        public void PhysicsOutOfBounds(PhysicsVector pos)
+        public void PhysicsOutOfBounds(Vector3 pos)
         {
             m_log.Error("[PHYSICS]: Physical Object went out of bounds.");
             
@@ -2376,7 +2383,7 @@ if (m_shape != null) {
                 //isattachment = ParentGroup.RootPart.IsAttachment;
 
             byte[] color = new byte[] {m_color.R, m_color.G, m_color.B, m_color.A};
-            remoteClient.SendPrimitiveToClient(new SendPrimitiveData(m_regionHandle, (ushort)(m_parentGroup.GetTimeDilation() * (float)ushort.MaxValue), LocalId, m_shape,
+            remoteClient.SendPrimitiveToClient(new SendPrimitiveData(m_regionHandle, m_parentGroup.GetTimeDilation(), LocalId, m_shape,
                                                lPos, Velocity, Acceleration, RotationOffset, RotationalVelocity, clientFlags, m_uuid, _ownerID,
                                                m_text, color, _parentID, m_particleSystem, m_clickAction, (byte)m_material, m_TextureAnimation, IsAttachment,
                                                AttachmentPoint,FromItemID, Sound, SoundGain, SoundFlags, SoundRadius, ParentGroup.GetUpdatePriority(remoteClient)));
@@ -2387,18 +2394,40 @@ if (m_shape != null) {
         /// </summary>
         public void SendScheduledUpdates()
         {
-            if (m_updateFlag == 1) //some change has been made so update the clients
-            {
-                AddTerseUpdateToAllAvatars();
-                ClearUpdateSchedule();
+            const float ROTATION_TOLERANCE = 0.01f;
+            const float VELOCITY_TOLERANCE = 0.001f;
+            const float POSITION_TOLERANCE = 0.05f;
+            const int TIME_MS_TOLERANCE = 3000;
 
-                // This causes the Scene to 'poll' physical objects every couple of frames
-                // bad, so it's been replaced by an event driven method.
-                //if ((ObjectFlags & (uint)PrimFlags.Physics) != 0)
-                //{
-                // Only send the constant terse updates on physical objects!
-                //ScheduleTerseUpdate();
-                //}
+            if (m_updateFlag == 1)
+            {
+                // Throw away duplicate or insignificant updates
+                if (!RotationOffset.ApproxEquals(m_lastRotation, ROTATION_TOLERANCE) ||
+                    !Acceleration.Equals(m_lastAcceleration) ||
+                    !Velocity.ApproxEquals(m_lastVelocity, VELOCITY_TOLERANCE) ||
+                    !RotationalVelocity.ApproxEquals(m_lastAngularVelocity, VELOCITY_TOLERANCE) ||
+                    !OffsetPosition.ApproxEquals(m_lastPosition, POSITION_TOLERANCE) ||
+                    Environment.TickCount - m_lastTerseSent > TIME_MS_TOLERANCE)
+                {
+                    AddTerseUpdateToAllAvatars();
+                    ClearUpdateSchedule();
+
+                    // This causes the Scene to 'poll' physical objects every couple of frames
+                    // bad, so it's been replaced by an event driven method.
+                    //if ((ObjectFlags & (uint)PrimFlags.Physics) != 0)
+                    //{
+                    // Only send the constant terse updates on physical objects!
+                    //ScheduleTerseUpdate();
+                    //}
+
+                    // Update the "last" values
+                    m_lastPosition = OffsetPosition;
+                    m_lastRotation = RotationOffset;
+                    m_lastVelocity = Velocity;
+                    m_lastAcceleration = Acceleration;
+                    m_lastAngularVelocity = RotationalVelocity;
+                    m_lastTerseSent = Environment.TickCount;
+                }
             }
             else
             {
@@ -2540,7 +2569,7 @@ if (m_shape != null) {
             }
         }
 
-        public void SetForce(PhysicsVector force)
+        public void SetForce(Vector3 force)
         {
             if (PhysActor != null)
             {
@@ -2564,7 +2593,7 @@ if (m_shape != null) {
             }
         }
 
-        public void SetVehicleVectorParam(int param, PhysicsVector value)
+        public void SetVehicleVectorParam(int param, Vector3 value)
         {
             if (PhysActor != null)
             {
@@ -3406,8 +3435,8 @@ if (m_shape != null) {
                     PhysActor = m_parentGroup.Scene.PhysicsScene.AddPrimShape(
                         Name,
                         Shape,
-                        new PhysicsVector(AbsolutePosition.X, AbsolutePosition.Y, AbsolutePosition.Z),
-                        new PhysicsVector(Scale.X, Scale.Y, Scale.Z),
+                        AbsolutePosition,
+                        Scale,
                         RotationOffset,
                         UsePhysics);
 
@@ -3756,8 +3785,7 @@ if (m_shape != null) {
             // Causes this thread to dig into the Client Thread Data.
             // Remember your locking here!
             remoteClient.SendPrimTerseUpdate(new SendPrimitiveTerseData(m_regionHandle,
-                    (ushort)(m_parentGroup.GetTimeDilation() *
-                    (float)ushort.MaxValue), LocalId, lPos,
+                    m_parentGroup.GetTimeDilation(), LocalId, lPos,
                     RotationOffset, Velocity, Acceleration,
                     RotationalVelocity, state, FromItemID,
                     OwnerID, (int)AttachmentPoint, null, ParentGroup.GetUpdatePriority(remoteClient)));

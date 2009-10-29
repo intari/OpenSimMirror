@@ -144,9 +144,6 @@ namespace OpenSim.Region.ClientStack.LindenUDP
         private readonly OutgoingPacket[] m_nextPackets = new OutgoingPacket[THROTTLE_CATEGORY_COUNT];
         /// <summary>A reference to the LLUDPServer that is managing this client</summary>
         private readonly LLUDPServer m_udpServer;
-        /// <summary>Locks access to the variables used while calculating round-trip
-        /// packet times and the retransmission timeout</summary>
-        private readonly object m_roundTripCalcLock = new object();
 
         /// <summary>
         /// Default constructor
@@ -375,7 +372,7 @@ namespace OpenSim.Region.ClientStack.LindenUDP
                 OpenSim.Framework.LocklessQueue<OutgoingPacket> queue = m_packetOutboxes[category];
                 TokenBucket bucket = m_throttleCategories[category];
 
-                if (m_throttleCategories[category].RemoveTokens(packet.Buffer.DataLength))
+                if (bucket.RemoveTokens(packet.Buffer.DataLength))
                 {
                     // Enough tokens were removed from the bucket, the packet will not be queued
                     return false;
@@ -487,28 +484,25 @@ namespace OpenSim.Region.ClientStack.LindenUDP
             const float BETA = 0.25f;
             const float K = 4.0f;
 
-            lock (m_roundTripCalcLock)
+            if (RTTVAR == 0.0f)
             {
-                if (RTTVAR == 0.0f)
-                {
-                    // First RTT measurement
-                    SRTT = r;
-                    RTTVAR = r * 0.5f;
-                }
-                else
-                {
-                    // Subsequence RTT measurement
-                    RTTVAR = (1.0f - BETA) * RTTVAR + BETA * Math.Abs(SRTT - r);
-                    SRTT = (1.0f - ALPHA) * SRTT + ALPHA * r;
-                }
-
-                int rto = (int)(SRTT + Math.Max(m_udpServer.TickCountResolution, K * RTTVAR));
-
-                // Clamp the retransmission timeout to manageable values
-                rto = Utils.Clamp(RTO, 3000, 60000);
-
-                RTO = rto;
+                // First RTT measurement
+                SRTT = r;
+                RTTVAR = r * 0.5f;
             }
+            else
+            {
+                // Subsequence RTT measurement
+                RTTVAR = (1.0f - BETA) * RTTVAR + BETA * Math.Abs(SRTT - r);
+                SRTT = (1.0f - ALPHA) * SRTT + ALPHA * r;
+            }
+
+            int rto = (int)(SRTT + Math.Max(m_udpServer.TickCountResolution, K * RTTVAR));
+
+            // Clamp the retransmission timeout to manageable values
+            rto = Utils.Clamp(RTO, 3000, 60000);
+
+            RTO = rto;
 
             //m_log.Debug("[LLUDPCLIENT]: Setting agent " + this.Agent.FullName + "'s RTO to " + RTO + "ms with an RTTVAR of " +
             //    RTTVAR + " based on new RTT of " + r + "ms");
@@ -520,16 +514,13 @@ namespace OpenSim.Region.ClientStack.LindenUDP
         /// </summary>
         public void BackoffRTO()
         {
-            lock (m_roundTripCalcLock)
-            {
-                // Reset SRTT and RTTVAR, we assume they are bogus since things
-                // didn't work out and we're backing off the timeout
-                SRTT = 0.0f;
-                RTTVAR = 0.0f;
+            // Reset SRTT and RTTVAR, we assume they are bogus since things
+            // didn't work out and we're backing off the timeout
+            SRTT = 0.0f;
+            RTTVAR = 0.0f;
 
-                // Double the retransmission timeout
-                RTO = Math.Min(RTO * 2, 60000);
-            }
+            // Double the retransmission timeout
+            RTO = Math.Min(RTO * 2, 60000);
         }
 
         /// <summary>

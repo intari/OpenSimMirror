@@ -118,13 +118,13 @@ namespace OpenSim.Region.ClientStack.LindenUDP
         /// <summary></summary>
         //private UDPClientCollection m_clients = new UDPClientCollection();
         /// <summary>Bandwidth throttle for this UDP server</summary>
-        private TokenBucket m_throttle;
+        protected TokenBucket m_throttle;
         /// <summary>Bandwidth throttle rates for this UDP server</summary>
-        private ThrottleRates m_throttleRates;
+        protected ThrottleRates m_throttleRates;
         /// <summary>Manages authentication for agent circuits</summary>
         private AgentCircuitManager m_circuitManager;
         /// <summary>Reference to the scene this UDP server is attached to</summary>
-        private Scene m_scene;
+        protected Scene m_scene;
         /// <summary>The X/Y coordinates of the scene this UDP server is attached to</summary>
         private Location m_location;
         /// <summary>The size of the receive buffer for the UDP socket. This value
@@ -262,7 +262,7 @@ namespace OpenSim.Region.ClientStack.LindenUDP
                 for (int i = 0; i < packetCount; i++)
                 {
                     byte[] data = datas[i];
-                    m_scene.ClientManager.ForEach(
+                    m_scene.ForEachClient(
                         delegate(IClientAPI client)
                         {
                             if (client is LLClientView)
@@ -274,7 +274,7 @@ namespace OpenSim.Region.ClientStack.LindenUDP
             else
             {
                 byte[] data = packet.ToBytes();
-                m_scene.ClientManager.ForEach(
+                m_scene.ForEachClient(
                     delegate(IClientAPI client)
                     {
                         if (client is LLClientView)
@@ -570,27 +570,22 @@ namespace OpenSim.Region.ClientStack.LindenUDP
             // UseCircuitCode handling
             if (packet.Type == PacketType.UseCircuitCode)
             {
-                Util.FireAndForget(
-                    delegate(object o)
-                    {
-                        IPEndPoint remoteEndPoint = (IPEndPoint)buffer.RemoteEndPoint;
+                m_log.Debug("[LLUDPSERVER]: Handling UseCircuitCode packet from " + buffer.RemoteEndPoint);
+                object[] array = new object[] { buffer, packet };
 
-                        // Begin the process of adding the client to the simulator
-                        AddNewClient((UseCircuitCodePacket)packet, remoteEndPoint);
+                if (m_asyncPacketHandling)
+                    Util.FireAndForget(HandleUseCircuitCode, array);
+                else
+                    HandleUseCircuitCode(array);
 
-                        // Acknowledge the UseCircuitCode packet
-                        SendAckImmediate(remoteEndPoint, packet.Header.Sequence);
-                    }
-                );
                 return;
             }
 
             // Determine which agent this packet came from
             IClientAPI client;
-            if (!m_scene.ClientManager.TryGetValue(address, out client) || !(client is LLClientView))
+            if (!m_scene.TryGetClient(address, out client) || !(client is LLClientView))
             {
-                m_log.Debug("[LLUDPSERVER]: Received a " + packet.Type + " packet from an unrecognized source: " + address +
-                    " in " + m_scene.RegionInfo.RegionName + ", currently tracking " + m_scene.ClientManager.Count + " clients");
+                m_log.Debug("[LLUDPSERVER]: Received a " + packet.Type + " packet from an unrecognized source: " + address + " in " + m_scene.RegionInfo.RegionName);
                 return;
             }
 
@@ -692,6 +687,21 @@ namespace OpenSim.Region.ClientStack.LindenUDP
             packetInbox.Enqueue(new IncomingPacket(udpClient, packet));
         }
 
+        private void HandleUseCircuitCode(object o)
+        {
+            object[] array = (object[])o;
+            UDPPacketBuffer buffer = (UDPPacketBuffer)array[0];
+            UseCircuitCodePacket packet = (UseCircuitCodePacket)array[1];
+
+            IPEndPoint remoteEndPoint = (IPEndPoint)buffer.RemoteEndPoint;
+
+            // Begin the process of adding the client to the simulator
+            AddNewClient((UseCircuitCodePacket)packet, remoteEndPoint);
+
+            // Acknowledge the UseCircuitCode packet
+            SendAckImmediate(remoteEndPoint, packet.Header.Sequence);
+        }
+
         private void SendAckImmediate(IPEndPoint remoteEndpoint, uint sequenceNumber)
         {
             PacketAckPacket ack = new PacketAckPacket();
@@ -749,12 +759,13 @@ namespace OpenSim.Region.ClientStack.LindenUDP
             }
         }
 
-        private void AddClient(uint circuitCode, UUID agentID, UUID sessionID, IPEndPoint remoteEndPoint, AuthenticateResponse sessionInfo)
+        protected virtual void AddClient(uint circuitCode, UUID agentID, UUID sessionID, IPEndPoint remoteEndPoint, AuthenticateResponse sessionInfo)
         {
             // Create the LLUDPClient
             LLUDPClient udpClient = new LLUDPClient(this, m_throttleRates, m_throttle, circuitCode, agentID, remoteEndPoint);
+            IClientAPI existingClient;
 
-            if (!m_scene.ClientManager.ContainsKey(agentID))
+            if (!m_scene.TryGetClient(agentID, out existingClient))
             {
                 // Create the LLClientView
                 LLClientView client = new LLClientView(remoteEndPoint, m_scene, this, udpClient, sessionInfo, agentID, sessionID, circuitCode);
@@ -774,7 +785,7 @@ namespace OpenSim.Region.ClientStack.LindenUDP
         {
             // Remove this client from the scene
             IClientAPI client;
-            if (m_scene.ClientManager.TryGetValue(udpClient.AgentID, out client))
+            if (m_scene.TryGetClient(udpClient.AgentID, out client))
                 client.Close();
         }
 
@@ -789,6 +800,14 @@ namespace OpenSim.Region.ClientStack.LindenUDP
                 try
                 {
                     IncomingPacket incomingPacket = null;
+
+                    // HACK: This is a test to try and rate limit packet handling on Mono.
+                    // If it works, a more elegant solution can be devised
+                    if (Util.FireAndForgetCount() < 2)
+                    {
+                        //m_log.Debug("[LLUDPSERVER]: Incoming packet handler is sleeping");
+                        Thread.Sleep(30);
+                    }
 
                     if (packetInbox.Dequeue(100, ref incomingPacket))
                         Util.FireAndForget(ProcessInPacket, incomingPacket);
@@ -866,7 +885,7 @@ namespace OpenSim.Region.ClientStack.LindenUDP
 
                     // Handle outgoing packets, resends, acknowledgements, and pings for each
                     // client. m_packetSent will be set to true if a packet is sent
-                    m_scene.ClientManager.ForEachSync(clientPacketHandler);
+                    m_scene.ForEachClient(clientPacketHandler, false);
 
                     // If nothing was sent, sleep for the minimum amount of time before a
                     // token bucket could get more tokens
@@ -931,7 +950,7 @@ namespace OpenSim.Region.ClientStack.LindenUDP
             }
 
             // Make sure this client is still alive
-            if (m_scene.ClientManager.TryGetValue(udpClient.AgentID, out client))
+            if (m_scene.TryGetClient(udpClient.AgentID, out client))
             {
                 try
                 {
@@ -957,7 +976,7 @@ namespace OpenSim.Region.ClientStack.LindenUDP
             }
         }
 
-        private void LogoutHandler(IClientAPI client)
+        protected void LogoutHandler(IClientAPI client)
         {
             client.SendLogoutPacket();
             if (client.IsActive)

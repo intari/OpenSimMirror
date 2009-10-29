@@ -231,6 +231,10 @@ namespace OpenSim.Client.Linden
             {
                 return scene.RegionInfo;
             }
+            else if (m_scenes.Count > 0)
+            {
+                return m_scenes[0].RegionInfo;
+            }
             return null;
         }
 
@@ -286,7 +290,7 @@ namespace OpenSim.Client.Linden
             {
                 foreach (Scene nextScene in m_scenes)
                 {
-                    if (nextScene.RegionInfo.RegionName == regionName)
+                    if (nextScene.RegionInfo.RegionName.Equals(regionName, StringComparison.InvariantCultureIgnoreCase))
                     {
                         scene = nextScene;
                         return true;
